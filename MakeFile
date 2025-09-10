@@ -1,0 +1,60 @@
+SVC        ?= convertpdfgo
+IMAGE      ?= ghcr.io/yourorg/$(SVC):latest
+PLATFORM   ?= linux/amd64
+VERSION    := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+COMMIT     := $(shell git rev-parse --short HEAD 2>/dev/null || echo dev)
+
+.PHONY: help build run test tidy fmt vet lint up down logs up-local push
+
+help:
+	@echo "Targets:"
+	@echo "  build      - docker build"
+	@echo "  push       - push image"
+	@echo "  up         - docker compose up -d (prod-like)"
+	@echo "  up-local   - docker compose up -d (local DB/Redis bilan)"
+	@echo "  down       - docker compose down -v"
+	@echo "  logs       - docker compose logs -f app"
+	@echo "  run        - go run ./cmd/main.go"
+	@echo "  test       - go test ./..."
+	@echo "  tidy/fmt   - go mod tidy && go fmt ./..."
+	@echo "  vet/lint   - go vet ./..."
+
+build:
+	docker build \
+	  --platform=$(PLATFORM) \
+	  --build-arg VERSION=$(VERSION) \
+	  --build-arg COMMIT=$(COMMIT) \
+	  -t $(IMAGE) .
+
+push:
+	docker push $(IMAGE)
+
+up:
+	docker compose up -d
+
+up-local:
+	# localda Postgres/Redis portlari ham ko‘tariladi
+	docker compose up -d
+
+down:
+	docker compose down -v
+
+logs:
+	docker compose logs -f app
+
+run:
+	go run ./cmd/main.go
+
+test:
+	go test ./...
+
+tidy:
+	go mod tidy
+
+fmt:
+	go fmt ./...
+
+vet:
+	go vet ./...
+
+lint: vet

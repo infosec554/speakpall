@@ -1,0 +1,343 @@
+definitions:
+  models.ChangePasswordRequest:
+    properties:
+      new_password:
+        type: string
+      old_password:
+        type: string
+    type: object
+  models.GoogleAuthRequest:
+    properties:
+      code:
+        description: Google authorization code
+        example: 4/0AX4XfW...
+        type: string
+    required:
+    - code
+    type: object
+  models.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  models.LoginResponse:
+    properties:
+      access_token:
+        type: string
+      id:
+        type: string
+      refresh_token:
+        type: string
+      role:
+        type: string
+    type: object
+  models.LogoutRequest:
+    properties:
+      refresh_token:
+        type: string
+    type: object
+  models.RefreshTokenRequest:
+    properties:
+      refresh_token:
+        type: string
+    required:
+    - refresh_token
+    type: object
+  models.Response:
+    properties:
+      data: {}
+      description:
+        type: string
+      statusCode:
+        type: integer
+    type: object
+  models.SignupRequest:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+      password:
+        type: string
+    required:
+    - email
+    - name
+    - password
+    type: object
+  models.SignupResponse:
+    properties:
+      id:
+        description: Foydalanuvchi ID si
+        type: string
+    type: object
+  models.User:
+    properties:
+      avatar:
+        description: Foydalanuvchi profil rasmi URL (ixtiyoriy)
+        type: string
+      created_at:
+        description: Ro‘yxatdan o‘tgan vaqt
+        type: string
+      email:
+        description: Foydalanuvchi emaili
+        type: string
+      id:
+        description: Foydalanuvchi ID
+        type: string
+      language:
+        description: 'Foydalanuvchi tanlagan til (default: ''en'')'
+        type: string
+      name:
+        description: Foydalanuvchi ismi
+        type: string
+      notifications:
+        description: Foydalanuvchi bildirishnomalarni olishni xohlayaptimi
+        type: boolean
+      role:
+        description: Foydalanuvchi roli (admin, user)
+        type: string
+      status:
+        description: Foydalanuvchi holati (active, blocked)
+        type: string
+      updated_at:
+        description: Profil yangilangan vaqti
+        type: string
+    type: object
+info:
+  contact: {}
+  description: Authentication and Authorization API
+  title: Auth API
+  version: "1.0"
+paths:
+  /auth/change-password:
+    post:
+      consumes:
+      - application/json
+      description: Change password (user must send old and new password)
+      parameters:
+      - description: Change password
+        in: body
+        name: change_password
+        required: true
+        schema:
+          $ref: '#/definitions/models.ChangePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: Change user password
+      tags:
+      - user
+  /auth/google:
+    post:
+      consumes:
+      - application/json
+      description: Google OAuth code orqali login yoki ro‘yxatdan o‘tish (JWT tokenlar
+        qaytaradi)
+      parameters:
+      - description: Google authorization code
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/models.GoogleAuthRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.LoginResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Google orqali login yoki registratsiya
+      tags:
+      - auth
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: User login with email and password
+      parameters:
+      - description: Login credentials
+        in: body
+        name: login
+        required: true
+        schema:
+          $ref: '#/definitions/models.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.LoginResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: User login
+      tags:
+      - auth
+  /auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: JWT tokenlarni va sessionni bekor qiladi
+      parameters:
+      - description: Logout request (refresh_token optional)
+        in: body
+        name: data
+        schema:
+          $ref: '#/definitions/models.LogoutRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: Logout (chiqish)
+      tags:
+      - auth
+  /auth/refresh-token:
+    post:
+      consumes:
+      - application/json
+      description: Return new access & refresh token using a valid refresh token
+      parameters:
+      - description: Refresh token
+        in: body
+        name: refresh
+        required: true
+        schema:
+          $ref: '#/definitions/models.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.LoginResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Refresh access token
+      tags:
+      - auth
+  /auth/signup:
+    post:
+      consumes:
+      - application/json
+      description: Register a new user (name, email, password)
+      parameters:
+      - description: Signup data
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/models.SignupRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.SignupResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Register a new user
+      tags:
+      - auth
+  /me:
+    get:
+      consumes:
+      - application/json
+      description: Get user profile (JWT token required)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.User'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: Get my profile
+      tags:
+      - user
+securityDefinitions:
+  ApiKeyAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

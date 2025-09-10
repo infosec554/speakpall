@@ -1,0 +1,21 @@
+
+DROP  TABLE IF  EXISTS users;
+DROP TABLE IF EXISTS auth_identities;
+DROP TABLE IF EXISTS auth_email_tokens;
+DROP TABLE IF EXISTS profiles;
+DROP TABLE IF  EXISTS user_interests;
+DROP TABLE IF EXISTS interests;
+DROP TABLE IF EXISTS user_interests;
+
+DROP TABLE IF EXISTS blocks;
+DROP TABLE IF EXISTS reports;
+DROP TABLE IF EXISTS match_attempts;
+
+DROP TABLE IF EXISTS  sessions;
+DROP TABLE IF EXISTS messages;
+DROP TABLE IF EXISTS streaks;
+
+
+DROP TABLE IF EXISTS badges;
+DROP TABLE IF EXISTS user_badges;
+DROP TABLE IF EXISTS audit_logs;

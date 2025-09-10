@@ -1,0 +1,84 @@
+version: "3.8"
+
+services:
+  # -------- App (prod & local) --------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # image: ghcr.io/yourorg/convertpdfgo:latest   # agar registrydan olsangiz
+    restart: always
+    env_file:
+      - ./.env
+    environment:
+      # Agar .env’da bo‘lsa, bu satrlar shart emas
+      # GOTENBERG_URL: http://gotenberg:3000
+      # MIGRATIONS_DIR: /app/migrations/postgres
+      # REDIS_DB: 0
+      # SERVICE_NAME: convertpdfgo
+      # LOGGER_LEVEL: info
+    volumes:
+      - ./migrations:/app/migrations:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      # Local profilga mos ravishda healthcheck kutadi
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
+  # -------- Gotenberg (ixtiyoriy) --------
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    restart: always
+    expose:
+      - "3000"            # faqat ichki tarmoq
+    command: ["gotenberg", "--chromium-disable-javascript=true"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
+  # -------- Postgres (faqat local) --------
+  postgres:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-1234}
+      POSTGRES_DB: ${POSTGRES_DB:-convertpdfgo}
+    ports:
+      - "5433:5432"       # local uchun ochiq port
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-convertpdfgo} -h 127.0.0.1 -p 5432"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # -------- Redis (faqat local) --------
+  redis:
+    image: redis:7
+    restart: always
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-1234}"]
+    ports:
+      - "6380:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-1234}", "PING"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  pgdata:
+  redisdata:
