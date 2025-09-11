@@ -25,15 +25,15 @@ type IUserStorage interface {
 
 	GetPasswordByID(ctx context.Context, userID string) (string, error)
 
+	UpdateRole(ctx context.Context, userID, role string) error
 
+	CreatePasswordResetToken(ctx context.Context, userID string) (string, error)
 
-
-
-
+	ValidatePasswordResetToken(ctx context.Context, token string) (string, error)
 }
 
 type IRedisStorage interface {
 	SetX(ctx context.Context, key string, value interface{}, duration time.Duration) error
 	Get(ctx context.Context, key string) (string, error)
-	Delete(ctx context.Context, key string) error // ⬅️ YANGI
+	Delete(ctx context.Context, key string) error 
 }

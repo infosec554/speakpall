@@ -264,6 +264,98 @@
                 }
             }
         },
+        "/auth/request-password-reset": {
+            "post": {
+                "description": "Send a password reset link to the user email",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Request password reset",
+                "parameters": [
+                    {
+                        "description": "User email",
+                        "name": "email",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.PasswordResetRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/reset-password": {
+            "post": {
+                "description": "Reset the user password using the reset token",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Reset user password",
+                "parameters": [
+                    {
+                        "description": "New password, repeat password, and token",
+                        "name": "data",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.ResetPasswordRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/signup": {
             "post": {
                 "description": "Register a new user (name, email, password)",
@@ -297,46 +389,6 @@
                     },
                     "400": {
                         "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/models.Response"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/models.Response"
-                        }
-                    }
-                }
-            }
-        },
-        "/me": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get user profile (JWT token required)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "user"
-                ],
-                "summary": "Get my profile",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.User"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/models.Response"
                         }
@@ -416,6 +468,18 @@
                 }
             }
         },
+        "models.PasswordResetRequest": {
+            "type": "object",
+            "required": [
+                "email"
+            ],
+            "properties": {
+                "email": {
+                    "description": "Foydalanuvchi emaili",
+                    "type": "string"
+                }
+            }
+        },
         "models.RefreshTokenRequest": {
             "type": "object",
             "required": [
@@ -423,6 +487,28 @@
             ],
             "properties": {
                 "refresh_token": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ResetPasswordRequest": {
+            "type": "object",
+            "required": [
+                "new_password",
+                "repeat_password",
+                "token"
+            ],
+            "properties": {
+                "new_password": {
+                    "description": "Yangi parol",
+                    "type": "string"
+                },
+                "repeat_password": {
+                    "description": "Takrorlangan parol",
+                    "type": "string"
+                },
+                "token": {
+                    "description": "Token",
                     "type": "string"
                 }
             }
@@ -463,51 +549,6 @@
             "properties": {
                 "id": {
                     "description": "Foydalanuvchi ID si",
-                    "type": "string"
-                }
-            }
-        },
-        "models.User": {
-            "type": "object",
-            "properties": {
-                "avatar": {
-                    "description": "Foydalanuvchi profil rasmi URL (ixtiyoriy)",
-                    "type": "string"
-                },
-                "created_at": {
-                    "description": "Ro‘yxatdan o‘tgan vaqt",
-                    "type": "string"
-                },
-                "email": {
-                    "description": "Foydalanuvchi emaili",
-                    "type": "string"
-                },
-                "id": {
-                    "description": "Foydalanuvchi ID",
-                    "type": "string"
-                },
-                "language": {
-                    "description": "Foydalanuvchi tanlagan til (default: 'en')",
-                    "type": "string"
-                },
-                "name": {
-                    "description": "Foydalanuvchi ismi",
-                    "type": "string"
-                },
-                "notifications": {
-                    "description": "Foydalanuvchi bildirishnomalarni olishni xohlayaptimi",
-                    "type": "boolean"
-                },
-                "role": {
-                    "description": "Foydalanuvchi roli (admin, user)",
-                    "type": "string"
-                },
-                "status": {
-                    "description": "Foydalanuvchi holati (active, blocked)",
-                    "type": "string"
-                },
-                "updated_at": {
-                    "description": "Profil yangilangan vaqti",
                     "type": "string"
                 }
             }

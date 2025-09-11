@@ -47,7 +47,7 @@ func (s *redisService) BlacklistToken(ctx context.Context, token string) error {
 		return nil
 	}
 	key := "jwt_blacklist:" + token
-	return s.redis.SetX(ctx, key, "1", 7*24*time.Hour) // 7 kun block
+	return s.redis.SetX(ctx, key, "1", 7*24*time.Hour)
 }
 
 func (s *redisService) IsTokenBlacklisted(ctx context.Context, token string) (bool, error) {

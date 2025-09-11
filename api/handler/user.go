@@ -10,6 +10,7 @@ import (
 
 	"speakpall/api/models"
 	"speakpall/pkg/jwt"
+	"speakpall/pkg/password"
 	"speakpall/pkg/security"
 )
 
@@ -108,33 +109,6 @@ func (h Handler) Login(c *gin.Context) {
 		RefreshToken: rt,
 	}
 	handleResponse(c, h.log, "login successful", http.StatusOK, resp)
-}
-
-// GetMyProfile godoc
-// @Summary      Get my profile
-// @Description  Get user profile (JWT token required)
-// @Tags         user
-// @Accept       json
-// @Produce      json
-// @Success      200 {object} models.User
-// @Failure      401 {object} models.Response
-// @Failure      500 {object} models.Response
-// @Router       /me [get]
-// @Security ApiKeyAuth
-func (h *Handler) GetMyProfile(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		handleResponse(c, h.log, "unauthorized", http.StatusUnauthorized, nil)
-		return
-	}
-
-	user, err := h.services.User().GetByID(c.Request.Context(), userID.(string))
-	if err != nil {
-		handleResponse(c, h.log, "failed to get user", http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	handleResponse(c, h.log, "user profile", http.StatusOK, user)
 }
 
 // RefreshToken godoc
@@ -298,7 +272,13 @@ func (h Handler) GoogleAuth(c *gin.Context) {
 	handleResponse(c, h.log, "login via google", http.StatusOK, resp)
 }
 
-
+func ExtractBearerToken(c *gin.Context) string {
+	authHeader := c.GetHeader("Authorization")
+	if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+		return authHeader[7:]
+	}
+	return ""
+}
 
 // Logout godoc
 // @Summary      Logout (chiqish)
@@ -333,15 +313,79 @@ func (h Handler) Logout(c *gin.Context) {
 	handleResponse(c, h.log, "Logged out successfully", http.StatusOK, nil)
 }
 
-// Helper: Bearer tokenni olish
-func ExtractBearerToken(c *gin.Context) string {
-	authHeader := c.GetHeader("Authorization")
-	if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
-		return authHeader[7:]
+// RequestPasswordReset godoc
+// @Summary      Request password reset
+// @Description  Send a password reset link to the user email
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        email body models.PasswordResetRequest true "User email"
+// @Success      200 {object} models.Response
+// @Failure      400 {object} models.Response
+// @Failure      500 {object} models.Response
+// @Router       /auth/request-password-reset [post]
+func (h Handler) RequestPasswordReset(c *gin.Context) {
+	var req models.PasswordResetRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		handleResponse(c, h.log, "invalid request", http.StatusBadRequest, err.Error())
+		return
 	}
-	return ""
+
+	// Foydalanuvchi uchun token yaratish va yuborish
+	token, err := h.services.User().CreatePasswordResetToken(c.Request.Context(), req.Email)
+	if err != nil {
+		handleResponse(c, h.log, "failed to send reset link", http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	handleResponse(c, h.log, "password reset link sent", http.StatusOK, gin.H{"token": token})
 }
 
+// @Summary      Reset user password
+// @Description  Reset the user password using the reset token
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        data body models.ResetPasswordRequest true "New password, repeat password, and token"
+// @Success      200 {object} models.Response
+// @Failure      400 {object} models.Response
+// @Failure      500 {object} models.Response
+// @Router       /auth/reset-password [post]
+func (h *Handler) ResetPassword(c *gin.Context) {
+	var req models.ResetPasswordRequest
 
+	// 1. Frontenddan kelgan yangi parol va takrorlashni tekshirish
+	if err := c.ShouldBindJSON(&req); err != nil {
+		handleResponse(c, h.log, "invalid request", http.StatusBadRequest, err.Error())
+		return
+	}
 
+	// 2. Parollar mos kelmasligini tekshirish
+	if req.NewPassword != req.RepeatPassword {
+		handleResponse(c, h.log, "passwords do not match", http.StatusBadRequest, "Repeat password does not match the new password")
+		return
+	}
 
+	// 3. Parol murakkabligini tekshirish
+	err := password.ValidatePassword(req.NewPassword)
+	if err != nil {
+		handleResponse(c, h.log, "invalid password", http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// 3. Tokenni tasdiqlash va parolni yangilash
+	userID, err := h.services.User().ValidatePasswordResetToken(c.Request.Context(), req.Token)
+	if err != nil {
+		handleResponse(c, h.log, "invalid or expired token", http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	// 4. Yangi parolni yangilash
+	err = h.services.User().ResetPassword(c.Request.Context(), userID, req.NewPassword)
+	if err != nil {
+		handleResponse(c, h.log, "failed to reset password", http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	handleResponse(c, h.log, "password reset successfully", http.StatusOK, gin.H{"message": "Password has been successfully reset."})
+}

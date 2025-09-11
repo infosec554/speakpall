@@ -2,11 +2,13 @@ package postgres
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"speakpall/api/models"
+	"speakpall/pkg/jwt"
 	"speakpall/pkg/logger"
 	"speakpall/storage"
 )
@@ -97,4 +99,53 @@ func (r *userRepo) GetPasswordByID(ctx context.Context, userID string) (string, 
 		return "", err
 	}
 	return hashedPassword, nil
+}
+func (r *userRepo) UpdateRole(ctx context.Context, userID, role string) error {
+	query := `UPDATE users SET role = $1 WHERE id = $2 AND status = 'active'`
+	_, err := r.db.Exec(ctx, query, role, userID)
+	if err != nil {
+		r.log.Error("failed to update user role", logger.Error(err))
+		return err
+	}
+	return nil
+}
+
+
+// Token yaratish va foydalanuvchiga yuborish
+func (r *userRepo) CreatePasswordResetToken(ctx context.Context, userID string) (string, error) {
+	// Token yaratish uchun JWT yordamida user_id va role ni yuboramiz
+	token, err := jwt.GenerateAccessToken(userID, "user") // Yoki kerakli role'ni yuborish
+	if err != nil {
+		r.log.Error("failed to create password reset token", logger.Error(err))
+		return "", err
+	}
+
+	// Tokenni saqlash (agar kerak bo'lsa)
+	// Agar saqlashni istasangiz, saqlang. Bu tokenni database yoki Redisga saqlash mumkin.
+	// Saqlash jarayonini faqat kerakli bo'lganda amalga oshirish kerak.
+
+	// Masalan, tokenni saqlash (bu joy optional)
+	query := `INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)`
+	_, err = r.db.Exec(ctx, query, userID, token, time.Now().Add(1*time.Hour)) // Tokenning amal qilish muddati
+	if err != nil {
+		r.log.Error("failed to save password reset token", logger.Error(err))
+		return "", err
+	}
+
+	return token, nil
+}
+
+// Tokenni tasdiqlash (amal qilish vaqti bilan tekshirish)
+func (r *userRepo) ValidatePasswordResetToken(ctx context.Context, token string) (string, error) {
+	var userID string
+	query := `
+        SELECT user_id FROM password_reset_tokens
+        WHERE token = $1 AND expires_at > NOW()
+    `
+	err := r.db.QueryRow(ctx, query, token).Scan(&userID)
+	if err != nil {
+		r.log.Error("failed to validate password reset token", logger.Error(err))
+		return "", err
+	}
+	return userID, nil
 }

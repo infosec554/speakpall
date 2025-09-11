@@ -27,7 +27,6 @@ func New(services service.IServiceManager, log logger.ILogger) *gin.Engine {
 	// Swagger
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	// ===================== AUTH =====================
 	auth := r.Group("/auth")
 	{
 		auth.POST("/signup", h.SignUp)

@@ -41,12 +41,36 @@ definitions:
       refresh_token:
         type: string
     type: object
+  models.PasswordResetRequest:
+    properties:
+      email:
+        description: Foydalanuvchi emaili
+        type: string
+    required:
+    - email
+    type: object
   models.RefreshTokenRequest:
     properties:
       refresh_token:
         type: string
     required:
     - refresh_token
+    type: object
+  models.ResetPasswordRequest:
+    properties:
+      new_password:
+        description: Yangi parol
+        type: string
+      repeat_password:
+        description: Takrorlangan parol
+        type: string
+      token:
+        description: Token
+        type: string
+    required:
+    - new_password
+    - repeat_password
+    - token
     type: object
   models.Response:
     properties:
@@ -73,39 +97,6 @@ definitions:
     properties:
       id:
         description: Foydalanuvchi ID si
-        type: string
-    type: object
-  models.User:
-    properties:
-      avatar:
-        description: Foydalanuvchi profil rasmi URL (ixtiyoriy)
-        type: string
-      created_at:
-        description: Ro‘yxatdan o‘tgan vaqt
-        type: string
-      email:
-        description: Foydalanuvchi emaili
-        type: string
-      id:
-        description: Foydalanuvchi ID
-        type: string
-      language:
-        description: 'Foydalanuvchi tanlagan til (default: ''en'')'
-        type: string
-      name:
-        description: Foydalanuvchi ismi
-        type: string
-      notifications:
-        description: Foydalanuvchi bildirishnomalarni olishni xohlayaptimi
-        type: boolean
-      role:
-        description: Foydalanuvchi roli (admin, user)
-        type: string
-      status:
-        description: Foydalanuvchi holati (active, blocked)
-        type: string
-      updated_at:
-        description: Profil yangilangan vaqti
         type: string
     type: object
 info:
@@ -280,6 +271,66 @@ paths:
       summary: Refresh access token
       tags:
       - auth
+  /auth/request-password-reset:
+    post:
+      consumes:
+      - application/json
+      description: Send a password reset link to the user email
+      parameters:
+      - description: User email
+        in: body
+        name: email
+        required: true
+        schema:
+          $ref: '#/definitions/models.PasswordResetRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Request password reset
+      tags:
+      - auth
+  /auth/reset-password:
+    post:
+      consumes:
+      - application/json
+      description: Reset the user password using the reset token
+      parameters:
+      - description: New password, repeat password, and token
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/models.ResetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: Reset user password
+      tags:
+      - auth
   /auth/signup:
     post:
       consumes:
@@ -310,31 +361,6 @@ paths:
       summary: Register a new user
       tags:
       - auth
-  /me:
-    get:
-      consumes:
-      - application/json
-      description: Get user profile (JWT token required)
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.User'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/models.Response'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/models.Response'
-      security:
-      - ApiKeyAuth: []
-      summary: Get my profile
-      tags:
-      - user
 securityDefinitions:
   ApiKeyAuth:
     in: header

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"speakpall/api/models"
 	"speakpall/pkg/logger"
@@ -18,6 +19,12 @@ type UserService interface {
 
 	ChangePassword(ctx context.Context, userID, oldPassword, newPassword string) error
 	GoogleAuth(ctx context.Context, email, name, googleID string) (string, error)
+	
+	SetRole(ctx context.Context, userID, role string) error
+	
+	CreatePasswordResetToken(ctx context.Context, email string) (string, error)
+	ValidatePasswordResetToken(ctx context.Context, token string) (string, error)
+	ResetPassword(ctx context.Context, userID string, newPassword string) error
 }
 
 type userService struct {
@@ -93,4 +100,153 @@ func (s *userService) GoogleAuth(ctx context.Context, email, name, googleID stri
 		Password: "",
 	}
 	return s.stg.Create(ctx, req)
+}
+
+
+func (s *userService) SetRole(ctx context.Context, userID, role string) error {
+	if role != "admin" && role != "user" {
+		return fmt.Errorf("invalid role: %s", role)
+	}
+	return s.stg.UpdateRole(ctx, userID, role)
+}
+
+
+
+func (s *userService) CreatePasswordResetToken(ctx context.Context, email string) (string, error) {
+	// Foydalanuvchini email orqali topish
+	user, err := s.stg.GetForLoginByEmail(ctx, email)
+	if err != nil {
+		return "", errors.New("user not found")
+	}
+
+	// Token yaratish
+	token, err := s.stg.CreatePasswordResetToken(ctx, user.ID)
+	if err != nil {
+		return "", err
+	}
+
+	subject := "Password Reset Request"
+	body := fmt.Sprintf(`
+	<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Password Reset Request</title>
+		<style>
+			body {
+				font-family: Arial, sans-serif;
+				background-color: #f4f4f4;
+				margin: 0;
+				padding: 0;
+			}
+
+			.container {
+				width: 100%;
+				max-width: 600px;
+				margin: 0 auto;
+				background-color: #ffffff;
+				padding: 30px;
+				border-radius: 8px;
+				box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+			}
+
+			h2 {
+				color: #333;
+				font-size: 24px;
+				margin-bottom: 15px;
+			}
+
+			p {
+				color: #666;
+				font-size: 16px;
+				line-height: 1.6;
+			}
+
+			.button {
+				display: inline-block;
+				background-color: #007bff;
+				color: white;
+				padding: 12px 20px;
+				font-size: 16px;
+				text-decoration: none;
+				border-radius: 4px;
+				font-weight: bold;
+				margin-top: 20px;
+				text-align: center;
+			}
+
+			.footer {
+				margin-top: 30px;
+				font-size: 14px;
+				text-align: center;
+				color: #aaa;
+			}
+
+			.footer a {
+				color: #007bff;
+				text-decoration: none;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<h2>Password Reset Request</h2>
+			<p>Hi,</p>
+			<p>You requested to reset your password. Please click the button below to reset your password:</p>
+			<p>
+				<a href="https://yourapp.com/reset-password?token=%s" class="button">Reset Password</a>
+			</p>
+			<p>If you didn't request this change, please ignore this email.</p>
+
+			<div class="footer">
+				<p>Best regards,</p>
+				<p>YourApp Team</p>
+			</div>
+		</div>
+	</body>
+	</html>
+`, token)
+
+	// Email yuborish
+	err = s.mailerCore.Send(email, subject, body)
+	if err != nil {
+		return "", errors.New("failed to send reset token")
+	}
+
+	return token, nil
+
+	// Email yuborish
+	err = s.mailerCore.Send(email, subject, body)
+	if err != nil {
+		return "", errors.New("failed to send reset token")
+	}
+
+	return token, nil
+}
+
+// Parolni tiklash uchun tokenni tasdiqlash
+func (s *userService) ValidatePasswordResetToken(ctx context.Context, token string) (string, error) {
+	userID, err := s.stg.ValidatePasswordResetToken(ctx, token)
+	if err != nil {
+		return "", err
+	}
+	return userID, nil
+}
+
+// Yangi parolni yangilash
+func (s *userService) ResetPassword(ctx context.Context, userID string, newPassword string) error {
+	// Yangi parolni hash qilish
+	hashedPassword, err := security.HashPassword(newPassword)
+	if err != nil {
+		return errors.New("failed to hash new password")
+	}
+
+	// Parolni yangilash
+	err = s.stg.UpdatePassword(ctx, userID, hashedPassword)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
