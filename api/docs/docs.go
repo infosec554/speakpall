@@ -183,7 +183,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "JWT tokenlarni va sessionni bekor qiladi",
+                "description": "JWT tokenlarni va sessionni bekor qiladi (minimal variant: cookie’larni tozalash)",
                 "consumes": [
                     "application/json"
                 ],
@@ -414,9 +414,14 @@ const docTemplate = `{
     "definitions": {
         "models.ChangePasswordRequest": {
             "type": "object",
+            "required": [
+                "new_password",
+                "old_password"
+            ],
             "properties": {
                 "new_password": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 6
                 },
                 "old_password": {
                     "type": "string"
@@ -430,7 +435,7 @@ const docTemplate = `{
             ],
             "properties": {
                 "code": {
-                    "description": "Google authorization code",
+                    "description": "OAuth authorization code",
                     "type": "string",
                     "example": "4/0AX4XfW..."
                 }
@@ -470,6 +475,9 @@ const docTemplate = `{
         },
         "models.LogoutRequest": {
             "type": "object",
+            "required": [
+                "refresh_token"
+            ],
             "properties": {
                 "refresh_token": {
                     "type": "string"
@@ -483,7 +491,6 @@ const docTemplate = `{
             ],
             "properties": {
                 "email": {
-                    "description": "Foydalanuvchi emaili",
                     "type": "string"
                 }
             }
@@ -508,15 +515,13 @@ const docTemplate = `{
             ],
             "properties": {
                 "new_password": {
-                    "description": "Yangi parol",
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 6
                 },
                 "repeat_password": {
-                    "description": "Takrorlangan parol",
                     "type": "string"
                 },
                 "token": {
-                    "description": "Token",
                     "type": "string"
                 }
             }
@@ -541,13 +546,25 @@ const docTemplate = `{
                 "password"
             ],
             "properties": {
+                "country_code": {
+                    "type": "string"
+                },
                 "email": {
                     "type": "string"
                 },
-                "name": {
+                "level": {
                     "type": "string"
                 },
+                "name": {
+                    "type": "string",
+                    "maxLength": 80,
+                    "minLength": 1
+                },
                 "password": {
+                    "type": "string",
+                    "minLength": 6
+                },
+                "target_lang": {
                     "type": "string"
                 }
             }
@@ -556,7 +573,6 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "id": {
-                    "description": "Foydalanuvchi ID si",
                     "type": "string"
                 }
             }
@@ -581,7 +597,6 @@ var SwaggerInfo = &swag.Spec{
 	Description:      "Authentication and Authorization API",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
-
 }
 
 func init() {

@@ -17,8 +17,7 @@ CREATE TABLE IF NOT EXISTS users (
   created_at     timestamptz NOT NULL DEFAULT now()
 );
 
--- Eslatma: citext ishlashi uchun, agar hali yo'q bo‘lsa:
--- CREATE EXTENSION IF NOT EXISTS citext;
+
 
 -- EMAIL OTP / VERIFY
 CREATE TABLE IF NOT EXISTS auth_email_tokens (
@@ -62,9 +61,9 @@ CREATE TABLE IF NOT EXISTS match_preferences (
   target_lang      text,                -- qaysi til bo'yicha sherik
   min_level        smallint CHECK (min_level BETWEEN 1 AND 6 OR min_level IS NULL),
   max_level        smallint CHECK (max_level BETWEEN 1 AND 6 OR max_level IS NULL),
-  gender_filter    text CHECK (gender_filter IN ('male','female','any') OR gender_filter IS NULL),
+  gender_filter    text CHECK (gender_filter IN ('male','female') OR gender_filter IS NULL),
   min_rating       smallint CHECK (min_rating BETWEEN 1 AND 5 OR min_rating IS NULL),
-  countries_allow  text[],             -- ['UZ','TR', ...] (ixtiyoriy)
+  countries_allow  text[],            
   created_at       timestamptz NOT NULL DEFAULT now(),
   updated_at       timestamptz,
   CHECK (min_level IS NULL OR max_level IS NULL OR min_level <= max_level)

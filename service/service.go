@@ -15,6 +15,7 @@ type IServiceManager interface {
 	Redis() RedisService
 
 	Google() GoogleService
+	Profile() ProfileService
 }
 
 type service struct {
@@ -23,6 +24,7 @@ type service struct {
 
 	redisService  RedisService
 	googleService GoogleService
+	profileService ProfileService
 }
 
 func New(storage storage.IStorage, log logger.ILogger, mailerCore *mailer.Mailer, redis storage.IRedisStorage, googleCfg config.OAuthProviderConfig) IServiceManager {
@@ -32,6 +34,7 @@ func New(storage storage.IStorage, log logger.ILogger, mailerCore *mailer.Mailer
 
 		redisService:  NewRedisService(redis, log),
 		googleService: NewGoogleService(GoogleOAuthConfig(googleCfg)), // <-- config ni uzatish!
+		profileService: NewProfileService( storage, log ),
 
 	}
 }
@@ -50,4 +53,8 @@ func (s *service) Redis() RedisService {
 
 func (s *service) Google() GoogleService {
 	return s.googleService
+}
+
+func (s *service) Profile() ProfileService {
+	return  s.profileService
 }
