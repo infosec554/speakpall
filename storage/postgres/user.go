@@ -1,3 +1,4 @@
+// storage/postgres/user_repo.go
 package postgres
 
 import (
@@ -8,7 +9,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"speakpall/api/models"
-	"speakpall/pkg/jwt"
 	"speakpall/pkg/logger"
 	"speakpall/storage"
 )
@@ -19,133 +19,118 @@ type userRepo struct {
 }
 
 func NewUserRepo(db *pgxpool.Pool, log logger.ILogger) storage.IUserStorage {
-	return &userRepo{
-		db:  db,
-		log: log,
-	}
+	return &userRepo{db: db, log: log}
 }
-func (r *userRepo) Create(ctx context.Context, req models.SignupRequest) (string, error) {
+
+// CreateUser: req.Password bu yerga KELGUNCHA hashlangan bo‘lishi kerak.
+func (r *userRepo) CreateUser(ctx context.Context, req models.SignupRequest) (string, error) {
 	id := uuid.New().String()
-	query := `
-		INSERT INTO users (id, name, email, password, status, role)
-		VALUES ($1, $2, $3, $4, 'active', 'user')
+	const q = `
+		INSERT INTO users (
+			id, email, display_name, password_hash, target_lang, level, country_code
+		) VALUES ($1,$2,$3,$4,$5,$6,$7)
 	`
-	_, err := r.db.Exec(ctx, query, id, req.Name, req.Email, req.Password)
+	_, err := r.db.Exec(ctx, q,
+		id,
+		req.Email,
+		req.DisplayName,
+		req.Password, // hashlangan parol
+		req.TargetLang,
+		req.Level,
+		req.CountryCode,
+	)
 	if err != nil {
-		r.log.Error("error inserting user", logger.Error(err))
+		r.log.Error("users insert failed", logger.Error(err))
 		return "", err
 	}
 	return id, nil
 }
-func (r *userRepo) GetForLoginByEmail(ctx context.Context, email string) (models.LoginUser, error) {
-	var user models.LoginUser
-	query := `
-		SELECT id, password, status, role
-		FROM users
-		WHERE email = $1 AND status = 'active'
-	`
-	err := r.db.QueryRow(ctx, query, email).Scan(
-		&user.ID,
-		&user.Password,
-		&user.Status,
-		&user.Role,
-	)
-	if err != nil {
-		r.log.Error("failed to get user by email", logger.Error(err))
+
+func (r *userRepo) GetLoginByEmail(ctx context.Context, email string) (models.LoginUser, error) {
+	const q = `SELECT id, password_hash, role FROM users WHERE email = $1`
+	var u models.LoginUser
+	if err := r.db.QueryRow(ctx, q, email).Scan(&u.ID, &u.PasswordHash, &u.Role); err != nil {
+		r.log.Error("get login by email failed", logger.Error(err))
 		return models.LoginUser{}, err
 	}
-	return user, nil
+	return u, nil
 }
-func (r *userRepo) GetByID(ctx context.Context, id string) (*models.User, error) {
-	query := `
-		SELECT id, name, email, status, role, created_at
+
+func (r *userRepo) GetUserByID(ctx context.Context, id string) (*models.User, error) {
+	const q = `
+		SELECT
+			id, email, display_name, password_hash, google_id, avatar_url,
+			age, gender, country_code, target_lang, level, role,
+			created_at, updated_at
 		FROM users
-		WHERE id = $1 AND status = 'active'
+		WHERE id = $1
 	`
-	var user models.User
-	err := r.db.QueryRow(ctx, query, id).Scan(
-		&user.ID,
-		&user.Name,
-		&user.Email,
-		&user.Status,
-		&user.Role,
-		&user.CreatedAt,
-	)
-	if err != nil {
-		r.log.Error("failed to get user by ID", logger.Error(err))
+	var u models.User
+	if err := r.db.QueryRow(ctx, q, id).Scan(
+		&u.ID, &u.Email, &u.DisplayName, &u.PasswordHash, &u.GoogleID, &u.AvatarURL,
+		&u.Age, &u.Gender, &u.CountryCode, &u.TargetLang, &u.Level, &u.Role,
+		&u.CreatedAt, &u.UpdatedAt,
+	); err != nil {
+		r.log.Error("get user by id failed", logger.Error(err))
 		return nil, err
 	}
-	return &user, nil
+	return &u, nil
 }
 
-// postgres/userRepo.go
-
-func (r *userRepo) UpdatePassword(ctx context.Context, userID, newPassword string) error {
-	query := `UPDATE users SET password = $1 WHERE id = $2 AND status = 'active'`
-	_, err := r.db.Exec(ctx, query, newPassword, userID)
-	if err != nil {
-		r.log.Error("failed to update user password", logger.Error(err))
+func (r *userRepo) UpdatePasswordHash(ctx context.Context, userID, newHash string) error {
+	const q = `UPDATE users SET password_hash=$1, updated_at=NOW() WHERE id=$2`
+	if _, err := r.db.Exec(ctx, q, newHash, userID); err != nil {
+		r.log.Error("update password failed", logger.Error(err))
 		return err
 	}
 	return nil
 }
 
-func (r *userRepo) GetPasswordByID(ctx context.Context, userID string) (string, error) {
-	var hashedPassword string
-	query := `SELECT password FROM users WHERE id = $1 AND status = 'active'`
-	err := r.db.QueryRow(ctx, query, userID).Scan(&hashedPassword)
-	if err != nil {
-		r.log.Error("failed to get user password", logger.Error(err))
-		return "", err
-	}
-	return hashedPassword, nil
-}
 func (r *userRepo) UpdateRole(ctx context.Context, userID, role string) error {
-	query := `UPDATE users SET role = $1 WHERE id = $2 AND status = 'active'`
-	_, err := r.db.Exec(ctx, query, role, userID)
-	if err != nil {
-		r.log.Error("failed to update user role", logger.Error(err))
+	const q = `UPDATE users SET role=$1, updated_at=NOW() WHERE id=$2`
+	if _, err := r.db.Exec(ctx, q, role, userID); err != nil {
+		r.log.Error("update role failed", logger.Error(err))
 		return err
 	}
 	return nil
 }
 
+// --- Password reset (repo token yaratmaydi) ---
 
-// Token yaratish va foydalanuvchiga yuborish
-func (r *userRepo) CreatePasswordResetToken(ctx context.Context, userID string) (string, error) {
-	// Token yaratish uchun JWT yordamida user_id va role ni yuboramiz
-	token, err := jwt.GenerateAccessToken(userID, "user") // Yoki kerakli role'ni yuborish
-	if err != nil {
-		r.log.Error("failed to create password reset token", logger.Error(err))
-		return "", err
+func (r *userRepo) SavePasswordResetToken(ctx context.Context, userID, token string, expiresAt time.Time) error {
+	const q = `
+		INSERT INTO password_reset_tokens (user_id, token, expires_at, created_at)
+		VALUES ($1, $2, $3, NOW())
+	`
+	if _, err := r.db.Exec(ctx, q, userID, token, expiresAt); err != nil {
+		r.log.Error("save reset token failed", logger.Error(err))
+		return err
 	}
-
-	// Tokenni saqlash (agar kerak bo'lsa)
-	// Agar saqlashni istasangiz, saqlang. Bu tokenni database yoki Redisga saqlash mumkin.
-	// Saqlash jarayonini faqat kerakli bo'lganda amalga oshirish kerak.
-
-	// Masalan, tokenni saqlash (bu joy optional)
-	query := `INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)`
-	_, err = r.db.Exec(ctx, query, userID, token, time.Now().Add(1*time.Hour)) // Tokenning amal qilish muddati
-	if err != nil {
-		r.log.Error("failed to save password reset token", logger.Error(err))
-		return "", err
-	}
-
-	return token, nil
+	return nil
 }
 
-// Tokenni tasdiqlash (amal qilish vaqti bilan tekshirish)
-func (r *userRepo) ValidatePasswordResetToken(ctx context.Context, token string) (string, error) {
+func (r *userRepo) GetUserIDByPasswordResetToken(ctx context.Context, token string, now time.Time) (string, error) {
+	const q = `
+		SELECT user_id
+		FROM password_reset_tokens
+		WHERE token = $1 AND expires_at > $2
+		ORDER BY created_at DESC
+		LIMIT 1
+	`
 	var userID string
-	query := `
-        SELECT user_id FROM password_reset_tokens
-        WHERE token = $1 AND expires_at > NOW()
-    `
-	err := r.db.QueryRow(ctx, query, token).Scan(&userID)
-	if err != nil {
-		r.log.Error("failed to validate password reset token", logger.Error(err))
+	if err := r.db.QueryRow(ctx, q, token, now).Scan(&userID); err != nil {
+		r.log.Error("validate reset token failed", logger.Error(err))
 		return "", err
 	}
 	return userID, nil
+}
+
+func (r *userRepo) GetPasswordByID(ctx context.Context, userID string) (string, error) {
+	const q = `SELECT password_hash FROM users WHERE id = $1`
+	var ph string
+	if err := r.db.QueryRow(ctx, q, userID).Scan(&ph); err != nil {
+		r.log.Error("get password_hash by id failed", logger.Error(err))
+		return "", err
+	}
+	return ph, nil
 }

@@ -8,12 +8,12 @@ import (
 	"speakpall/storage"
 )
 
+const refreshTokenPrefix = "refresh_token:"
+
 type RedisService interface {
 	SetX(ctx context.Context, key string, value interface{}, duration time.Duration) error
 	Get(ctx context.Context, key string) (string, error)
 	DeleteRefreshToken(ctx context.Context, userID string) error
-	BlacklistToken(ctx context.Context, token string) error // <-- Yangi method
-	IsTokenBlacklisted(ctx context.Context, token string) (bool, error)
 }
 
 type redisService struct {
@@ -22,39 +22,36 @@ type redisService struct {
 }
 
 func NewRedisService(redis storage.IRedisStorage, log logger.ILogger) RedisService {
-	return &redisService{
-		redis: redis,
-		log:   log,
-	}
+	return &redisService{redis: redis, log: log}
 }
 
 func (s *redisService) SetX(ctx context.Context, key string, value interface{}, duration time.Duration) error {
-	s.log.Info("RedisService.SetX called", logger.String("key", key))
+	// ixtiyoriy log — juda shovqin qilmasa foydali
+	s.log.Info("redis SetX", logger.String("key", key))
+	// Agar yuqoridan deadline kelmagan bo'lsa, kichik timeout beramiz
+	if _, has := ctx.Deadline(); !has {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+	}
 	return s.redis.SetX(ctx, key, value, duration)
 }
 
 func (s *redisService) Get(ctx context.Context, key string) (string, error) {
+	if _, has := ctx.Deadline(); !has {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+	}
 	return s.redis.Get(ctx, key)
 }
 
 func (s *redisService) DeleteRefreshToken(ctx context.Context, userID string) error {
-	key := "refresh_token:" + userID
+	key := refreshTokenPrefix + userID
+	if _, has := ctx.Deadline(); !has {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+	}
 	return s.redis.Delete(ctx, key)
-}
-
-func (s *redisService) BlacklistToken(ctx context.Context, token string) error {
-	if token == "" {
-		return nil
-	}
-	key := "jwt_blacklist:" + token
-	return s.redis.SetX(ctx, key, "1", 7*24*time.Hour)
-}
-
-func (s *redisService) IsTokenBlacklisted(ctx context.Context, token string) (bool, error) {
-	key := "jwt_blacklist:" + token
-	val, err := s.redis.Get(ctx, key)
-	if err != nil && err.Error() != "redis: nil" {
-		return false, err
-	}
-	return val == "1", nil
 }

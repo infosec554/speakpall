@@ -12,7 +12,6 @@ services:
       - ./.env
     environment:
       # Agar .env’da bo‘lsa, bu satrlar shart emas
-      # GOTENBERG_URL: http://gotenberg:3000
       # MIGRATIONS_DIR: /app/migrations/postgres
       # REDIS_DB: 0
       # SERVICE_NAME: convertpdfgo
@@ -33,18 +32,6 @@ services:
       timeout: 3s
       retries: 20
 
-  # -------- Gotenberg (ixtiyoriy) --------
-  gotenberg:
-    image: gotenberg/gotenberg:8
-    restart: always
-    expose:
-      - "3000"            # faqat ichki tarmoq
-    command: ["gotenberg", "--chromium-disable-javascript=true"]
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
-      interval: 10s
-      timeout: 3s
-      retries: 20
 
   # -------- Postgres (faqat local) --------
   postgres:

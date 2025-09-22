@@ -1,10 +1,8 @@
 package handler
 
 import (
-	"context"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -27,34 +25,19 @@ import (
 // @Router       /auth/signup [post]
 func (h Handler) SignUp(c *gin.Context) {
 	var req models.SignupRequest
-
 	if err := c.ShouldBindJSON(&req); err != nil {
 		handleResponse(c, h.log, "invalid request", http.StatusBadRequest, err.Error())
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// Parolni hash qilish
-	hashedPassword, err := security.HashPassword(req.Password)
-	if err != nil {
-		handleResponse(c, h.log, "failed to hash password", http.StatusInternalServerError, err.Error())
-		return
-	}
-	req.Password = hashedPassword
-
-	// Foydalanuvchini yaratish
-	userID, err := h.services.User().Create(ctx, req)
+	// Parolni service qatlamida hash qilamiz (double-hash bo‘lmasin)
+	userID, err := h.services.User().Create(c.Request.Context(), req)
 	if err != nil {
 		handleResponse(c, h.log, "failed to create user", http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	// UserID va xohlasangiz token qaytarishingiz mumkin
-	handleResponse(c, h.log, "user created successfully", http.StatusCreated, models.SignupResponse{
-		ID: userID,
-	})
+	handleResponse(c, h.log, "user created successfully", http.StatusCreated, models.SignupResponse{ID: userID})
 }
 
 // Login godoc
@@ -69,7 +52,6 @@ func (h Handler) SignUp(c *gin.Context) {
 // @Failure      401 {object} models.Response
 // @Failure      500 {object} models.Response
 // @Router       /auth/login [post]
-// Login ...
 func (h Handler) Login(c *gin.Context) {
 	var req models.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -77,20 +59,16 @@ func (h Handler) Login(c *gin.Context) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	user, err := h.services.User().GetForLoginByEmail(ctx, req.Email)
+	user, err := h.services.User().GetForLoginByEmail(c.Request.Context(), req.Email)
 	if err != nil {
 		handleResponse(c, h.log, "user not found", http.StatusUnauthorized, err.Error())
 		return
 	}
-	if err := security.CompareHashAndPassword(user.Password, req.Password); err != nil {
+	if err := security.CompareHashAndPassword(user.PasswordHash, req.Password); err != nil {
 		handleResponse(c, h.log, "invalid credentials", http.StatusUnauthorized, "email or password is incorrect")
 		return
 	}
 
-	// ➜ faqat "role"
 	at, err := jwt.GenerateAccessToken(user.ID, user.Role)
 	if err != nil {
 		handleResponse(c, h.log, "failed to generate access token", http.StatusInternalServerError, err.Error())
@@ -136,14 +114,13 @@ func (h Handler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	// typ tekshir (refresh bo‘lishi shart)
 	if t, _ := claims["typ"].(string); t != "refresh" {
 		handleResponse(c, h.log, "invalid token type", http.StatusUnauthorized, nil)
 		return
 	}
 
 	userID := fmt.Sprint(claims["user_id"])
-	role := fmt.Sprint(claims["role"]) // bo‘lmasa bo‘sh chiqmasligi uchun
+	role := fmt.Sprint(claims["role"])
 	if userID == "" {
 		handleResponse(c, h.log, "invalid claims in refresh token", http.StatusUnauthorized, nil)
 		return
@@ -183,8 +160,8 @@ func (h Handler) RefreshToken(c *gin.Context) {
 // @Router /auth/change-password [post]
 // @Security ApiKeyAuth
 func (h Handler) ChangePassword(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
+	userID, ok := c.Get("user_id")
+	if !ok {
 		handleResponse(c, h.log, "unauthorized", http.StatusUnauthorized, nil)
 		return
 	}
@@ -195,11 +172,7 @@ func (h Handler) ChangePassword(c *gin.Context) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	err := h.services.User().ChangePassword(ctx, userID.(string), req.OldPassword, req.NewPassword)
-	if err != nil {
+	if err := h.services.User().ChangePassword(c.Request.Context(), userID.(string), req.OldPassword, req.NewPassword); err != nil {
 		handleResponse(c, h.log, err.Error(), http.StatusBadRequest, nil)
 		return
 	}
@@ -207,6 +180,7 @@ func (h Handler) ChangePassword(c *gin.Context) {
 	handleResponse(c, h.log, "password changed successfully", http.StatusOK, nil)
 }
 
+// GoogleAuth godoc
 // @Summary      Google orqali login yoki registratsiya
 // @Description  Google OAuth code orqali login yoki ro‘yxatdan o‘tish (JWT tokenlar qaytaradi)
 // @Tags         auth
@@ -225,23 +199,19 @@ func (h Handler) GoogleAuth(c *gin.Context) {
 		return
 	}
 
-	ctx := c.Request.Context()
-
-	googleUser, err := h.services.Google().ExchangeCodeForUser(ctx, req.Code)
+	googleUser, err := h.services.Google().ExchangeCodeForUser(c.Request.Context(), req.Code)
 	if err != nil {
 		handleResponse(c, h.log, "Google login failed", http.StatusUnauthorized, err.Error())
 		return
 	}
 
-	// Create or get user, returns userID (and ensures user exists)
-	userID, err := h.services.User().GoogleAuth(ctx, googleUser.Email, googleUser.Name, googleUser.GoogleID)
+	userID, err := h.services.User().GoogleAuth(c.Request.Context(), googleUser.Email, googleUser.Name, googleUser.GoogleID)
 	if err != nil {
 		handleResponse(c, h.log, "failed to create/login user", http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	// Fetch role (so existing admins keep their role)
-	u, err := h.services.User().GetByID(ctx, userID)
+	u, err := h.services.User().GetByID(c.Request.Context(), userID)
 	if err != nil {
 		handleResponse(c, h.log, "failed to load user", http.StatusInternalServerError, err.Error())
 		return
@@ -251,13 +221,12 @@ func (h Handler) GoogleAuth(c *gin.Context) {
 		role = "user"
 	}
 
-	// NEW helpers: access + refresh generated separately, with proper claims
-	accessToken, err := jwt.GenerateAccessToken(userID, role)
+	at, err := jwt.GenerateAccessToken(userID, role)
 	if err != nil {
 		handleResponse(c, h.log, "failed to generate access token", http.StatusInternalServerError, err.Error())
 		return
 	}
-	refreshToken, _, err := jwt.GenerateRefreshToken(userID)
+	rt, _, err := jwt.GenerateRefreshToken(userID)
 	if err != nil {
 		handleResponse(c, h.log, "failed to generate refresh token", http.StatusInternalServerError, err.Error())
 		return
@@ -266,23 +235,17 @@ func (h Handler) GoogleAuth(c *gin.Context) {
 	resp := models.LoginResponse{
 		ID:           userID,
 		Role:         role,
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
+		AccessToken:  at,
+		RefreshToken: rt,
 	}
 	handleResponse(c, h.log, "login via google", http.StatusOK, resp)
 }
 
-func ExtractBearerToken(c *gin.Context) string {
-	authHeader := c.GetHeader("Authorization")
-	if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
-		return authHeader[7:]
-	}
-	return ""
-}
+
 
 // Logout godoc
 // @Summary      Logout (chiqish)
-// @Description  JWT tokenlarni va sessionni bekor qiladi
+// @Description  JWT tokenlarni va sessionni bekor qiladi (minimal variant: cookie’larni tozalash)
 // @Tags         auth
 // @Accept       json
 // @Produce      json
@@ -292,24 +255,9 @@ func ExtractBearerToken(c *gin.Context) string {
 // @Router       /auth/logout [post]
 // @Security     ApiKeyAuth
 func (h Handler) Logout(c *gin.Context) {
-	accessToken := ExtractBearerToken(c)
-	var req models.LogoutRequest
-	_ = c.ShouldBindJSON(&req)
-
-	// Contextni uzating!
-	ctx := c.Request.Context()
-
-	if accessToken != "" {
-		_ = h.services.Redis().BlacklistToken(ctx, accessToken)
-	}
-	if req.RefreshToken != "" {
-		_ = h.services.Redis().BlacklistToken(ctx, req.RefreshToken)
-	}
-
-	// Cookie ni tozalash (agar front uchun kerak bo‘lsa)
+	// Minimal, qo‘shimcha helperlarsiz: faqat cookie tozalash
 	c.SetCookie("access_token", "", -1, "/", "", false, true)
 	c.SetCookie("refresh_token", "", -1, "/", "", false, true)
-
 	handleResponse(c, h.log, "Logged out successfully", http.StatusOK, nil)
 }
 
@@ -331,7 +279,6 @@ func (h Handler) RequestPasswordReset(c *gin.Context) {
 		return
 	}
 
-	// Foydalanuvchi uchun token yaratish va yuborish
 	token, err := h.services.User().CreatePasswordResetToken(c.Request.Context(), req.Email)
 	if err != nil {
 		handleResponse(c, h.log, "failed to send reset link", http.StatusInternalServerError, err.Error())
@@ -341,6 +288,7 @@ func (h Handler) RequestPasswordReset(c *gin.Context) {
 	handleResponse(c, h.log, "password reset link sent", http.StatusOK, gin.H{"token": token})
 }
 
+// ResetPassword godoc
 // @Summary      Reset user password
 // @Description  Reset the user password using the reset token
 // @Tags         auth
@@ -351,38 +299,30 @@ func (h Handler) RequestPasswordReset(c *gin.Context) {
 // @Failure      400 {object} models.Response
 // @Failure      500 {object} models.Response
 // @Router       /auth/reset-password [post]
-func (h *Handler) ResetPassword(c *gin.Context) {
+func (h Handler) ResetPassword(c *gin.Context) {
 	var req models.ResetPasswordRequest
-
-	// 1. Frontenddan kelgan yangi parol va takrorlashni tekshirish
 	if err := c.ShouldBindJSON(&req); err != nil {
 		handleResponse(c, h.log, "invalid request", http.StatusBadRequest, err.Error())
 		return
 	}
 
-	// 2. Parollar mos kelmasligini tekshirish
 	if req.NewPassword != req.RepeatPassword {
 		handleResponse(c, h.log, "passwords do not match", http.StatusBadRequest, "Repeat password does not match the new password")
 		return
 	}
 
-	// 3. Parol murakkabligini tekshirish
-	err := password.ValidatePassword(req.NewPassword)
-	if err != nil {
+	if err := password.ValidatePassword(req.NewPassword); err != nil {
 		handleResponse(c, h.log, "invalid password", http.StatusBadRequest, err.Error())
 		return
 	}
 
-	// 3. Tokenni tasdiqlash va parolni yangilash
 	userID, err := h.services.User().ValidatePasswordResetToken(c.Request.Context(), req.Token)
 	if err != nil {
 		handleResponse(c, h.log, "invalid or expired token", http.StatusUnauthorized, err.Error())
 		return
 	}
 
-	// 4. Yangi parolni yangilash
-	err = h.services.User().ResetPassword(c.Request.Context(), userID, req.NewPassword)
-	if err != nil {
+	if err := h.services.User().ResetPassword(c.Request.Context(), userID, req.NewPassword); err != nil {
 		handleResponse(c, h.log, "failed to reset password", http.StatusInternalServerError, err.Error())
 		return
 	}

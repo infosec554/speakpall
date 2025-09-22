@@ -2,8 +2,11 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"time"
 
 	"speakpall/api/models"
 	"speakpall/pkg/logger"
@@ -14,14 +17,14 @@ import (
 
 type UserService interface {
 	Create(ctx context.Context, req models.SignupRequest) (string, error)
-	GetForLoginByEmail(context.Context, string) (models.LoginUser, error)
+	GetForLoginByEmail(ctx context.Context, email string) (models.LoginUser, error)
 	GetByID(ctx context.Context, id string) (*models.User, error)
 
 	ChangePassword(ctx context.Context, userID, oldPassword, newPassword string) error
 	GoogleAuth(ctx context.Context, email, name, googleID string) (string, error)
-	
+
 	SetRole(ctx context.Context, userID, role string) error
-	
+
 	CreatePasswordResetToken(ctx context.Context, email string) (string, error)
 	ValidatePasswordResetToken(ctx context.Context, token string) (string, error)
 	ResetPassword(ctx context.Context, userID string, newPassword string) error
@@ -42,211 +45,151 @@ func NewUserService(stg storage.IStorage, log logger.ILogger, mailerCore *mailer
 }
 
 func (s *userService) Create(ctx context.Context, req models.SignupRequest) (string, error) {
-	s.log.Info("UserService.Create called", logger.String("email", req.Email))
+	s.log.Info("UserService.Create", logger.String("email", req.Email))
 
-	id, err := s.stg.Create(ctx, req)
+	// request.Password -> hash
+	hashed, err := security.HashPassword(req.Password)
 	if err != nil {
-		s.log.Error("failed to create user", logger.Error(err))
+		return "", errors.New("failed to hash password")
+	}
+	req.Password = hashed
+
+	id, err := s.stg.CreateUser(ctx, req)
+	if err != nil {
+		s.log.Error("create user failed", logger.Error(err))
 		return "", err
 	}
-
-	s.log.Info("user successfully created", logger.String("userID", id))
+	s.log.Info("user created", logger.String("userID", id))
 	return id, nil
 }
 
 func (s *userService) GetForLoginByEmail(ctx context.Context, email string) (models.LoginUser, error) {
-	s.log.Info("UserService.GetForLoginByEmail called", logger.String("email", email))
-
-	user, err := s.stg.GetForLoginByEmail(ctx, email)
+	s.log.Info("UserService.GetForLoginByEmail", logger.String("email", email))
+	u, err := s.stg.GetLoginByEmail(ctx, email)
 	if err != nil {
-		s.log.Error("failed to get user for login", logger.Error(err))
+		s.log.Error("get login by email failed", logger.Error(err))
 		return models.LoginUser{}, err
 	}
-
-	s.log.Info("user fetched for login", logger.String("userID", user.ID))
-	return user, nil
+	return u, nil
 }
 
 func (s *userService) GetByID(ctx context.Context, id string) (*models.User, error) {
-	s.log.Info("userService.GetByID called")
-	return s.stg.GetByID(ctx, id)
+	s.log.Info("UserService.GetByID", logger.String("userID", id))
+	return s.stg.GetUserByID(ctx, id)
 }
+
 func (s *userService) ChangePassword(ctx context.Context, userID, oldPassword, newPassword string) error {
-	hashedOldPassword, err := s.stg.GetPasswordByID(ctx, userID)
-	if err != nil {
-		return err
-	}
+    user, err := s.stg.GetUserByID(ctx, userID)
+    if err != nil {
+        return err
+    }
 
-	if err := security.CompareHashAndPassword(hashedOldPassword, oldPassword); err != nil {
-		return errors.New("old password is incorrect")
-	}
+    if err := security.CompareHashAndPassword(user.PasswordHash, oldPassword); err != nil {
+        return errors.New("old password is incorrect")
+    }
 
-	hashedNewPassword, err := security.HashPassword(newPassword)
-	if err != nil {
-		return errors.New("failed to hash new password")
-	}
+    newHash, err := security.HashPassword(newPassword)
+    if err != nil {
+        return errors.New("failed to hash new password")
+    }
 
-	return s.stg.UpdatePassword(ctx, userID, hashedNewPassword)
+    return s.stg.UpdatePasswordHash(ctx, userID, newHash)
 }
+
+
 
 func (s *userService) GoogleAuth(ctx context.Context, email, name, googleID string) (string, error) {
-	user, err := s.stg.GetForLoginByEmail(ctx, email)
-	if err == nil {
-		return user.ID, nil
+	// 1) bor-yo‘qligini tekshiramiz
+	u, err := s.stg.GetLoginByEmail(ctx, email)
+	if err == nil && u.ID != "" {
+		return u.ID, nil
 	}
+
+	// 2) yo‘q bo‘lsa, random parol yaratib, hashlab create qilamiz
+	buf := make([]byte, 24)
+	if _, err := rand.Read(buf); err != nil {
+		return "", errors.New("failed to generate random password")
+	}
+	randomPass := base64.RawURLEncoding.EncodeToString(buf)
+
+	hashed, err := security.HashPassword(randomPass)
+	if err != nil {
+		return "", errors.New("failed to hash password")
+	}
+
 	req := models.SignupRequest{
-		Name:     name,
-		Email:    email,
-		Password: "",
+		DisplayName: name,
+		Email:       email,
+		Password:    hashed, // CreateUser hash kutadi (oldinda hashlangan)
 	}
-	return s.stg.Create(ctx, req)
+	id, err := s.stg.CreateUser(ctx, req)
+	if err != nil {
+		return "", err
+	}
+
+	// Eslatma: agar google_id ni ham saqlamoqchi bo‘lsangiz,
+	// storage ga `UpdateGoogleID(userID, googleID)` kabi metod qo‘shib, shu yerda chaqirasiz.
+
+	return id, nil
 }
 
-
 func (s *userService) SetRole(ctx context.Context, userID, role string) error {
-	if role != "admin" && role != "user" {
+	if role != models.RoleAdmin && role != models.RoleUser {
 		return fmt.Errorf("invalid role: %s", role)
 	}
 	return s.stg.UpdateRole(ctx, userID, role)
 }
 
-
-
 func (s *userService) CreatePasswordResetToken(ctx context.Context, email string) (string, error) {
-	// Foydalanuvchini email orqali topish
-	user, err := s.stg.GetForLoginByEmail(ctx, email)
-	if err != nil {
+	// userni topamiz
+	u, err := s.stg.GetLoginByEmail(ctx, email)
+	if err != nil || u.ID == "" {
 		return "", errors.New("user not found")
 	}
 
-	// Token yaratish
-	token, err := s.stg.CreatePasswordResetToken(ctx, user.ID)
-	if err != nil {
+	// 32 baytli URL-safe token generatsiya
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", errors.New("failed to generate token")
+	}
+	token := base64.RawURLEncoding.EncodeToString(b)
+
+	// 1 soat amal qiladi
+	expiresAt := time.Now().Add(1 * time.Hour)
+	if err := s.stg.SavePasswordResetToken(ctx, u.ID, token, expiresAt); err != nil {
 		return "", err
 	}
 
+	// Email yuborish (HTML)
 	subject := "Password Reset Request"
 	body := fmt.Sprintf(`
-	<!DOCTYPE html>
-	<html lang="en">
-	<head>
-		<meta charset="UTF-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<title>Password Reset Request</title>
-		<style>
-			body {
-				font-family: Arial, sans-serif;
-				background-color: #f4f4f4;
-				margin: 0;
-				padding: 0;
-			}
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Password Reset</title></head>
+<body style="font-family:Arial,sans-serif;background:#f4f4f4;margin:0;padding:24px">
+  <div style="max-width:600px;margin:0 auto;background:#fff;padding:24px;border-radius:8px">
+    <h2 style="margin:0 0 12px">Password Reset</h2>
+    <p style="margin:0 0 16px">Hi, click the button below to reset your password:</p>
+    <p><a href="https://yourapp.com/reset-password?token=%s"
+          style="display:inline-block;background:#007bff;color:#fff;text-decoration:none;padding:12px 20px;border-radius:4px">Reset Password</a></p>
+    <p style="color:#888;margin:16px 0 0">If you didn’t request this, just ignore this email.</p>
+  </div>
+</body></html>`, token)
 
-			.container {
-				width: 100%;
-				max-width: 600px;
-				margin: 0 auto;
-				background-color: #ffffff;
-				padding: 30px;
-				border-radius: 8px;
-				box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-			}
-
-			h2 {
-				color: #333;
-				font-size: 24px;
-				margin-bottom: 15px;
-			}
-
-			p {
-				color: #666;
-				font-size: 16px;
-				line-height: 1.6;
-			}
-
-			.button {
-				display: inline-block;
-				background-color: #007bff;
-				color: white;
-				padding: 12px 20px;
-				font-size: 16px;
-				text-decoration: none;
-				border-radius: 4px;
-				font-weight: bold;
-				margin-top: 20px;
-				text-align: center;
-			}
-
-			.footer {
-				margin-top: 30px;
-				font-size: 14px;
-				text-align: center;
-				color: #aaa;
-			}
-
-			.footer a {
-				color: #007bff;
-				text-decoration: none;
-			}
-		</style>
-	</head>
-	<body>
-		<div class="container">
-			<h2>Password Reset Request</h2>
-			<p>Hi,</p>
-			<p>You requested to reset your password. Please click the button below to reset your password:</p>
-			<p>
-				<a href="https://yourapp.com/reset-password?token=%s" class="button">Reset Password</a>
-			</p>
-			<p>If you didn't request this change, please ignore this email.</p>
-
-			<div class="footer">
-				<p>Best regards,</p>
-				<p>YourApp Team</p>
-			</div>
-		</div>
-	</body>
-	</html>
-`, token)
-
-	// Email yuborish
-	err = s.mailerCore.Send(email, subject, body)
-	if err != nil {
-		return "", errors.New("failed to send reset token")
-	}
-
-	return token, nil
-
-	// Email yuborish
-	err = s.mailerCore.Send(email, subject, body)
-	if err != nil {
-		return "", errors.New("failed to send reset token")
+	if err := s.mailerCore.Send(email, subject, body); err != nil {
+		return "", errors.New("failed to send reset email")
 	}
 
 	return token, nil
 }
 
-// Parolni tiklash uchun tokenni tasdiqlash
 func (s *userService) ValidatePasswordResetToken(ctx context.Context, token string) (string, error) {
-	userID, err := s.stg.ValidatePasswordResetToken(ctx, token)
-	if err != nil {
-		return "", err
-	}
-	return userID, nil
+	return s.stg.GetUserIDByPasswordResetToken(ctx, token, time.Now())
 }
 
-// Yangi parolni yangilash
 func (s *userService) ResetPassword(ctx context.Context, userID string, newPassword string) error {
-	// Yangi parolni hash qilish
-	hashedPassword, err := security.HashPassword(newPassword)
+	hash, err := security.HashPassword(newPassword)
 	if err != nil {
 		return errors.New("failed to hash new password")
 	}
-
-	// Parolni yangilash
-	err = s.stg.UpdatePassword(ctx, userID, hashedPassword)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return s.stg.UpdatePasswordHash(ctx, userID, hash)
 }

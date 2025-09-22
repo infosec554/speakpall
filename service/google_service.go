@@ -41,24 +41,27 @@ func NewGoogleService(config GoogleOAuthConfig) GoogleService {
 }
 
 func (g *googleService) ExchangeCodeForUser(ctx context.Context, code string) (*models.GoogleUser, error) {
-	token, err := g.oauthConfig.Exchange(ctx, code)
+	tok, err := g.oauthConfig.Exchange(ctx, code)
 	if err != nil {
-		return nil, fmt.Errorf("failed to exchange code for token: %w", err)
+		return nil, fmt.Errorf("oauth exchange failed: %w", err)
 	}
 
-	oauth2Service, err := oauth2v2.New(g.oauthConfig.Client(ctx, token))
+	oas, err := oauth2v2.New(g.oauthConfig.Client(ctx, tok))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create oauth2 client: %w", err)
+		return nil, fmt.Errorf("oauth client init failed: %w", err)
 	}
 
-	userinfo, err := oauth2Service.Userinfo.Get().Do()
+	ui, err := oas.Userinfo.Get().Do()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user info: %w", err)
+		return nil, fmt.Errorf("userinfo fetch failed: %w", err)
 	}
+
+
 
 	return &models.GoogleUser{
-		Email:    userinfo.Email,
-		Name:     userinfo.Name,
-		GoogleID: userinfo.Id,
+		Email:    ui.Email,
+		Name:     ui.Name,
+		GoogleID: ui.Id,
+		Picture:  ui.Picture, // models.GoogleUser da omitempty bor
 	}, nil
 }
