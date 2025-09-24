@@ -19,6 +19,13 @@ definitions:
     required:
     - code
     type: object
+  models.InterestsResponse:
+    properties:
+      interest_ids:
+        items:
+          type: integer
+        type: array
+    type: object
   models.LoginRequest:
     properties:
       email:
@@ -47,12 +54,65 @@ definitions:
     required:
     - refresh_token
     type: object
+  models.MatchPreferences:
+    properties:
+      countries_allow:
+        items:
+          type: string
+        type: array
+      gender_filter:
+        description: male|female|any
+        type: string
+      max_level:
+        type: integer
+      min_level:
+        description: 1..6
+        type: integer
+      min_rating:
+        description: 1..5
+        type: integer
+      target_lang:
+        type: string
+      updated_at:
+        type: string
+    type: object
   models.PasswordResetRequest:
     properties:
       email:
         type: string
     required:
     - email
+    type: object
+  models.Profile:
+    properties:
+      about:
+        type: string
+      age:
+        type: integer
+      avatar:
+        type: string
+      country_code:
+        type: string
+      created_at:
+        type: string
+      email:
+        type: string
+      gender:
+        description: '"male"|"female"|nil'
+        type: string
+      id:
+        type: string
+      level:
+        description: 1..6
+        type: integer
+      name:
+        type: string
+      native_lang:
+        type: string
+      target_lang:
+        type: string
+      timezone:
+        type: string
     type: object
   models.RefreshTokenRequest:
     properties:
@@ -110,10 +170,104 @@ definitions:
       id:
         type: string
     type: object
+  models.UpdateInterestsRequest:
+    properties:
+      interest_ids:
+        items:
+          type: integer
+        minItems: 1
+        type: array
+    required:
+    - interest_ids
+    type: object
+  models.UpdateMatchPrefsRequest:
+    properties:
+      countries_allow:
+        items:
+          type: string
+        type: array
+      gender_filter:
+        enum:
+        - male
+        - female
+        - any
+        type: string
+      max_level:
+        maximum: 6
+        minimum: 1
+        type: integer
+      min_level:
+        maximum: 6
+        minimum: 1
+        type: integer
+      min_rating:
+        maximum: 5
+        minimum: 1
+        type: integer
+      target_lang:
+        type: string
+    type: object
+  models.UpdateProfileRequest:
+    properties:
+      about:
+        maxLength: 2000
+        type: string
+      age:
+        maximum: 120
+        minimum: 13
+        type: integer
+      avatar:
+        type: string
+      country_code:
+        type: string
+      gender:
+        enum:
+        - male
+        - female
+        type: string
+      level:
+        maximum: 6
+        minimum: 1
+        type: integer
+      name:
+        maxLength: 80
+        minLength: 1
+        type: string
+      native_lang:
+        type: string
+      target_lang:
+        type: string
+      timezone:
+        type: string
+    type: object
+  models.UpdateSettingsRequest:
+    properties:
+      allow_messages:
+        type: boolean
+      discoverable:
+        type: boolean
+      notify_email:
+        type: boolean
+      notify_push:
+        type: boolean
+    type: object
+  models.UserSettings:
+    properties:
+      allow_messages:
+        type: boolean
+      discoverable:
+        type: boolean
+      notify_email:
+        type: boolean
+      notify_push:
+        type: boolean
+      updated_at:
+        type: string
+    type: object
 info:
   contact: {}
-  description: Authentication and Authorization API
-  title: Auth API
+  description: Authentication, Profile, Settings, Match Prefs
+  title: Auth + Profile API
   version: "1.0"
 paths:
   /auth/change-password:
@@ -373,6 +527,230 @@ paths:
       summary: Register a new user
       tags:
       - auth
+  /user/me:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Profile'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: Get my profile
+      tags:
+      - profile
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Fields to update (partial)
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpdateProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: Update my profile (partial)
+      tags:
+      - profile
+  /user/me/interests:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.InterestsResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: Get my interests
+      tags:
+      - profile
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Full list to set (replaces existing)
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpdateInterestsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: Replace my interests
+      tags:
+      - profile
+  /user/me/match-prefs:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.MatchPreferences'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: Get my match preferences
+      tags:
+      - profile
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Fields to update
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpdateMatchPrefsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: Update my match preferences (partial)
+      tags:
+      - profile
+  /user/me/settings:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.UserSettings'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: Get my settings
+      tags:
+      - profile
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Fields to update
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpdateSettingsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: Update my settings (partial)
+      tags:
+      - profile
 securityDefinitions:
   ApiKeyAuth:
     in: header

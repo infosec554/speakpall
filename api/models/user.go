@@ -14,11 +14,12 @@ type User struct {
 	PasswordHash string     `json:"-"                       db:"password_hash"`  // jsonda chiqmaydi
 	GoogleID     *string    `json:"google_id,omitempty"     db:"google_id"`      // NULLable UNIQUE
 	AvatarURL    *string    `json:"avatar,omitempty"        db:"avatar_url"`     // NULLable
-	Age          *int       `json:"age,omitempty"           db:"age"`            // NULL yoki 13..120
+	Age          *int       `json:"age,omitempty"           db:"age"`            // 13..120 yoki NULL
 	Gender       *string    `json:"gender,omitempty"        db:"gender"`         // 'male' | 'female' | NULL
-	CountryCode  *string    `json:"country_code,omitempty"  db:"country_code"`   // CHAR(2) yoki NULL
-	TargetLang   *string    `json:"target_lang,omitempty"   db:"target_lang"`    // NULL
-	Level        *string    `json:"level,omitempty"         db:"level"`          // NULL (A1..C2)
+	CountryCode  *string    `json:"country_code,omitempty"  db:"country_code"`   // ISO-2 country code
+	NativeLang   *string    `json:"native_lang,omitempty"   db:"native_lang"`
+	TargetLang   *string    `json:"target_lang,omitempty"   db:"target_lang"`
+	Level        *int16     `json:"level,omitempty"         db:"level"`          // 1..6 yoki NULL
 	Role         string     `json:"role"                    db:"role"`           // 'admin' | 'user' (DEFAULT 'user')
 	CreatedAt    time.Time  `json:"created_at"              db:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"              db:"updated_at"`
@@ -36,13 +37,16 @@ type SignupRequest struct {
 	DisplayName string  `json:"name"          binding:"required,min=1,max=80"`
 	Email       string  `json:"email"         binding:"required,email"`
 	Password    string  `json:"password"      binding:"required,min=6"`
+	CountryCode *string `json:"country_code,omitempty" binding:"omitempty,len=2,uppercase"`
+	NativeLang  *string `json:"native_lang,omitempty"`
 	TargetLang  *string `json:"target_lang,omitempty"`
-	Level       *string `json:"level,omitempty"`
-	CountryCode *string `json:"country_code,omitempty"`
+	Level       *int16  `json:"level,omitempty" binding:"omitempty,min=1,max=6"`
+	Age         *int    `json:"age,omitempty"   binding:"omitempty,min=13,max=120"`
 }
 
 type SignupResponse struct {
-	ID string `json:"id"`
+	ID   string `json:"id"`
+	Role string `json:"role"`
 }
 
 // Login
@@ -73,4 +77,3 @@ type ResetPasswordRequest struct {
 	NewPassword    string `json:"new_password"     binding:"required,min=6"`
 	RepeatPassword string `json:"repeat_password"  binding:"required,eqfield=NewPassword"`
 }
-

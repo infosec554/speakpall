@@ -1,4 +1,3 @@
-// api/models/profile.go
 package models
 
 // GET /user/me javobi uchun (asosiy profil)
@@ -12,7 +11,7 @@ type Profile struct {
 	CountryCode  *string `json:"country_code,omitempty"`
 	NativeLang   *string `json:"native_lang,omitempty"`
 	TargetLang   *string `json:"target_lang,omitempty"`
-	Level        *int    `json:"level,omitempty"`  // 1..6
+	Level        *int    `json:"level,omitempty"` // 1..6
 	About        *string `json:"about,omitempty"`
 	Timezone     *string `json:"timezone,omitempty"`
 	CreatedAt    string  `json:"created_at"`
@@ -38,21 +37,6 @@ type UpdateInterestsRequest struct {
 }
 type InterestsResponse struct {
 	InterestIDs []int `json:"interest_ids"`
-}
-
-// Settings
-type UserSettings struct {
-	Discoverable   bool   `json:"discoverable"`
-	AllowMessages  bool   `json:"allow_messages"`
-	NotifyPush     bool   `json:"notify_push"`
-	NotifyEmail    bool   `json:"notify_email"`
-	UpdatedAt      string `json:"updated_at,omitempty"`
-}
-type UpdateSettingsRequest struct {
-	Discoverable  *bool `json:"discoverable"`
-	AllowMessages *bool `json:"allow_messages"`
-	NotifyPush    *bool `json:"notify_push"`
-	NotifyEmail   *bool `json:"notify_email"`
 }
 
 // Match preferences

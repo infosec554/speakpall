@@ -55,6 +55,12 @@ func New(services service.IServiceManager, log logger.ILogger) *gin.Engine {
 
 		user.GET("/me/match-prefs", h.GetMyMatchPrefs)
 		user.PATCH("/me/match-prefs", h.PatchMyMatchPrefs)
+
+		user.POST("/friends/:id", h.PostFriend)
+		user.DELETE("/friends/:id", h.DeleteFriend)
+		user.GET("/friends", h.GetFriends)
+
+
 	}
 
 	return r

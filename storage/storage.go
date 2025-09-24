@@ -1,4 +1,3 @@
-// storage/interfaces.go
 package storage
 
 import (
@@ -11,7 +10,12 @@ import (
 type IStorage interface {
 	User() IUserStorage
 	Profile() IProfileStorage
+	Settings() ISettingsStorage
 	Redis() IRedisStorage
+	Matchs() IMatchPreferencesStorage
+	Interest() IUserInterestsStorage
+	Friend() IFriendStorage
+
 	Close()
 }
 
@@ -33,17 +37,30 @@ type IRedisStorage interface {
 	Delete(ctx context.Context, key string) error
 }
 
-
 type IProfileStorage interface {
 	GetProfile(ctx context.Context, userID string) (*models.Profile, error)
 	UpdateProfile(ctx context.Context, userID string, req models.UpdateProfileRequest) error
+}
 
-	GetUserInterests(ctx context.Context, userID string) ([]int, error)
-	ReplaceUserInterests(ctx context.Context, userID string, interestIDs []int) error
-
+type ISettingsStorage interface {
 	GetUserSettings(ctx context.Context, userID string) (*models.UserSettings, error)
 	UpsertUserSettings(ctx context.Context, userID string, req models.UpdateSettingsRequest) error
+}
 
+type IMatchPreferencesStorage interface {
 	GetMatchPrefs(ctx context.Context, userID string) (*models.MatchPreferences, error)
 	UpsertMatchPrefs(ctx context.Context, userID string, req models.UpdateMatchPrefsRequest) error
 }
+
+type IUserInterestsStorage interface {
+	GetUserInterests(ctx context.Context, userID string) ([]int, error)
+	ReplaceUserInterests(ctx context.Context, userID string, interestIDs []int) error
+}
+
+type IFriendStorage interface {
+	AddFriend(ctx context.Context, userID, friendID string) error
+	RemoveFriend(ctx context.Context, userID, friendID string) error
+	ListFriends(ctx context.Context, userID string) ([]string, error) // return friend user IDs
+	IsFriend(ctx context.Context, userID, friendID string) (bool, error)
+}
+

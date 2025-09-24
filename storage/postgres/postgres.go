@@ -74,10 +74,26 @@ func (s *Store) User() storage.IUserStorage {
 	return NewUserRepo(s.pool, s.log)
 }
 
-func (s *Store) Profile()  storage.IProfileStorage {
+func (s *Store) Profile() storage.IProfileStorage {
 	return NewProfileRepo(s.pool, s.log)
 }
 
+func (s *Store) Settings() storage.ISettingsStorage {
+	return NewSettingsRepo(s.pool, s.log)
+}
+
+func (s *Store) Matchs() storage.IMatchPreferencesStorage {
+	return NewMatchsRepo(s.pool, s.log)
+}
+
+func (s *Store) Interest() storage.IUserInterestsStorage {
+	return NewInteresRepo(s.pool, s.log)
+
+}
+
+func (s *Store) Friend() storage.IFriendStorage {
+	return NewFriendRepo(s.pool, s.log)
+}
 func (s *Store) Redis() storage.IRedisStorage {
 	return s.redis
 }

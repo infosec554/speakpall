@@ -16,15 +16,23 @@ type IServiceManager interface {
 
 	Google() GoogleService
 	Profile() ProfileService
+	Settings() SettingsService
+	Matchs() MatchsService
+	Interes() InteresService
+	Friend() FriendService
 }
 
 type service struct {
 	userService UserService
 	mailer      MailerService
 
-	redisService  RedisService
-	googleService GoogleService
-	profileService ProfileService
+	redisService    RedisService
+	googleService   GoogleService
+	profileService  ProfileService
+	settingsService SettingsService
+	matchsService   MatchsService
+	interesService  InteresService
+	friendService  FriendService
 }
 
 func New(storage storage.IStorage, log logger.ILogger, mailerCore *mailer.Mailer, redis storage.IRedisStorage, googleCfg config.OAuthProviderConfig) IServiceManager {
@@ -32,10 +40,13 @@ func New(storage storage.IStorage, log logger.ILogger, mailerCore *mailer.Mailer
 		userService: NewUserService(storage, log, mailerCore),
 		mailer:      NewMailerService(mailerCore),
 
-		redisService:  NewRedisService(redis, log),
-		googleService: NewGoogleService(GoogleOAuthConfig(googleCfg)), // <-- config ni uzatish!
-		profileService: NewProfileService( storage, log ),
-
+		redisService:    NewRedisService(redis, log),
+		googleService:   NewGoogleService(GoogleOAuthConfig(googleCfg)), // <-- config ni uzatish!
+		profileService:  NewProfileService(storage, log),
+		settingsService: NewSettingsService(storage, log),
+		matchsService:   NewMatchsService(storage, log),
+		interesService: NewInteresService(storage,log),
+		friendService: NewFriendService(storage,log),
 	}
 }
 
@@ -56,5 +67,19 @@ func (s *service) Google() GoogleService {
 }
 
 func (s *service) Profile() ProfileService {
-	return  s.profileService
+	return s.profileService
+}
+func (s *service) Settings() SettingsService {
+	return s.settingsService
+}
+func (s *service) Matchs() MatchsService {
+	return s.matchsService
+}
+
+func (s *service) Interes() InteresService  {
+	return s.interesService
+}
+
+func (s *service) Friend()  FriendService {
+	return s.friendService
 }

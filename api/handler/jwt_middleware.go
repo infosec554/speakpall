@@ -9,8 +9,7 @@ import (
 	"speakpall/pkg/jwt"
 )
 
-// JWTMiddleware tekshiradi: Authorization: Bearer <access_token>
-// access token bo‘lsa, claims ichidan user_id va role ni context’ga qo‘yadi.
+
 func (h Handler) JWTMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
@@ -33,7 +32,6 @@ func (h Handler) JWTMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// typ 'access' bo‘lishi shart
 		if t, _ := claims["typ"].(string); t != "access" {
 			handleResponse(c, h.log, "invalid token type", http.StatusUnauthorized, nil)
 			c.Abort()
@@ -48,7 +46,6 @@ func (h Handler) JWTMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// kontekstga qo‘yib qo‘yamiz
 		c.Set("user_id", userID)
 		c.Set("role", role)
 

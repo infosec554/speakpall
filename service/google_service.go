@@ -62,6 +62,6 @@ func (g *googleService) ExchangeCodeForUser(ctx context.Context, code string) (*
 		Email:    ui.Email,
 		Name:     ui.Name,
 		GoogleID: ui.Id,
-		Picture:  ui.Picture, // models.GoogleUser da omitempty bor
+		Picture:  &ui.Picture, // models.GoogleUser da omitempty bor
 	}, nil
 }
